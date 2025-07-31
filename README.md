@@ -46,9 +46,19 @@ src/
 │   └── encryption.ts    # Encryption service
 ```
 
+## Inspiration
+
+Ever watched "Day of The Jackal" and thought "Hey, those USB-based encrypted chats look cool"? Well, same here! 
+While I can't guarantee this app will help you in international espionage (and I legally have to advise against that), 
+it's my humble attempt at creating something similar. Just remember: with great encryption comes great responsibility... 
+and occasionally forgotten passwords.
+
+*Disclaimer: No jackals were harmed in the making of this chat app. 🦊*
+
 ## Current Status
 
-This project is currently paused due to academic commitments. I'll revisit and continue development when I'm free from my degree studies. Future improvements planned:
+This project is currently hibernating while I battle the final boss (my degree). Like any good spy, I'll return when 
+you least expect it - or when my professors finally release me from academic captivity, whichever comes first. Future improvements planned:
 
 - Enhanced UI/UX
 - File sharing capabilities
@@ -73,4 +83,5 @@ WTFPL - Do What The F*ck You Want To Public License
 sh13y
 
 ---
-*Note: This is a development project and not intended for production use in its current state.*
+*Note: This is a development project and not intended for production use in its current state. 
+Also definitely not approved by any secret intelligence agencies... or is it? 🕵️‍♂️*
