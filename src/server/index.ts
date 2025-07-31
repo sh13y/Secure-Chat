@@ -30,19 +30,34 @@ const connectDB = async () => {
   try {
     const mongoURI = process.env.MONGODB_URI;
     if (!mongoURI) {
-      throw new Error('MongoDB connection string is not defined in environment variables');
+      console.error('MongoDB connection string is not defined in environment variables');
+      console.error('Please create a .env file with MONGODB_URI=your_connection_string');
+      // Retry connection after 10 seconds
+      setTimeout(connectDB, 10000);
+      return;
     }
 
     await mongoose.connect(mongoURI, {
-      serverSelectionTimeoutMS: 5000, // Timeout after 5 seconds
-      socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+      serverSelectionTimeoutMS: 10000, // Increased timeout
+      socketTimeoutMS: 45000,
+      connectTimeoutMS: 10000,
+      // Retry options
+      retryWrites: true,
+      retryReads: true,
+      // Connection pool options
+      maxPoolSize: 10,
+      minPoolSize: 1,
+      // TLS options for MongoDB Atlas (modern syntax)
+      tls: true,
+      tlsAllowInvalidCertificates: false,
+      tlsAllowInvalidHostnames: false,
     });
     
     console.log('Successfully connected to MongoDB Atlas');
   } catch (err) {
     console.error('MongoDB connection error:', err);
-    // Retry connection after 5 seconds
-    setTimeout(connectDB, 5000);
+    // Retry connection after 10 seconds with exponential backoff
+    setTimeout(connectDB, 10000);
   }
 };
 
@@ -52,11 +67,20 @@ connectDB();
 // Handle MongoDB connection events
 mongoose.connection.on('disconnected', () => {
   console.log('MongoDB disconnected! Attempting to reconnect...');
-  connectDB();
+  setTimeout(connectDB, 5000);
 });
 
 mongoose.connection.on('error', (err) => {
   console.error('MongoDB error:', err);
+  // Don't call connectDB here as it might cause infinite loops
+});
+
+mongoose.connection.on('connected', () => {
+  console.log('MongoDB connection established successfully');
+});
+
+mongoose.connection.on('reconnected', () => {
+  console.log('MongoDB reconnected successfully');
 });
 
 // Add message model interface
@@ -413,9 +437,20 @@ wss.on('connection', (ws: WebSocket) => {
           unreadCounts.map(({ _id, count }) => [_id, count])
         );
 
-        // Send unread counts to receiver
+        // Send message to both sender and receiver
+        const senderWs = users.get(username);
         const receiverWs = users.get(receiverId);
+        
+        // Send message to sender (for immediate display)
+        if (senderWs) {
+          senderWs.send(JSON.stringify(chatMessage));
+        }
+        
+        // Send message to receiver
         if (receiverWs) {
+          receiverWs.send(JSON.stringify(chatMessage));
+          
+          // Also send updated unread counts
           receiverWs.send(JSON.stringify({
             type: 'unreadCounts',
             counts: countsMap

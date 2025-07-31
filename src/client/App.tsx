@@ -40,64 +40,104 @@ const App: React.FC = () => {
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // WebSocket connection and message handling
   useEffect(() => {
     if (currentUser) {
       const socket = new WebSocket('ws://localhost:3001');
       setWs(socket);
 
       socket.onopen = () => {
+        console.log('WebSocket connected');
         socket.send(JSON.stringify({ type: 'register', username: currentUser }));
       };
 
       socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'users') {
-          setUsers(data.users.filter((user: string) => user !== currentUser));
-        } else if (data.type === 'messageDeleted') {
-          setMessages(prevMessages => prevMessages.filter(msg => msg.id !== data.messageId));
-        } else if (data.type === 'chatDeleted') {
-          if (data.users.includes(currentUser)) {
-            const otherUser = data.users.find((u: string) => u !== currentUser);
-            if (selectedUser === otherUser) {
-              setMessages([]);
-              setSelectedUser(null);
+        try {
+          const data = JSON.parse(event.data);
+          console.log('WebSocket message received:', data);
+          
+          if (data.type === 'users') {
+            setUsers(data.users.filter((user: string) => user !== currentUser));
+          } else if (data.type === 'messageDeleted') {
+            setMessages(prevMessages => prevMessages.filter(msg => msg.id !== data.messageId));
+          } else if (data.type === 'chatDeleted') {
+            if (data.users.includes(currentUser)) {
+              const otherUser = data.users.find((u: string) => u !== currentUser);
+              if (selectedUser === otherUser) {
+                setMessages([]);
+                setSelectedUser(null);
+              }
+              setUsers(prevUsers => prevUsers.filter(u => u !== otherUser));
             }
-            setUsers(prevUsers => prevUsers.filter(u => u !== otherUser));
+          } else if (data.type === 'unreadCounts') {
+            setUnreadCounts(data.counts);
+          } else if (data.type === 'messagesRead') {
+            if (data.reader === selectedUser) {
+              setMessages(prevMessages => 
+                prevMessages.map(msg => ({
+                  ...msg,
+                  read: true
+                }))
+              );
+            }
+          } else if (data.senderId && data.receiverId) {
+            // Handle incoming messages
+            console.log('Processing message:', { 
+              senderId: data.senderId, 
+              receiverId: data.receiverId, 
+              currentUser, 
+              selectedUser,
+              messageId: data.id 
+            });
+            
+            const decryptedMessage = {
+              ...data,
+              content: EncryptionService.decryptMessage(
+                data.content,
+                data.senderId,
+                data.receiverId
+              )
+            };
+            
+            // Only add message if it's for the current chat or if we're the receiver
+            if (data.senderId === selectedUser || data.receiverId === selectedUser || data.receiverId === currentUser || data.senderId === currentUser) {
+              console.log('Adding message to chat:', decryptedMessage);
+              setMessages(prev => {
+                // Check if message already exists to prevent duplicates
+                const messageExists = prev.some(msg => msg.id === data.id);
+                if (messageExists) {
+                  console.log('Message already exists, skipping');
+                  return prev;
+                }
+                console.log('Adding new message to chat');
+                return [...prev, decryptedMessage];
+              });
+            } else {
+              console.log('Message not for current chat, skipping');
+            }
+            
+            // If we're the receiver and viewing the chat, mark as read
+            if (data.receiverId === currentUser && selectedUser === data.senderId) {
+              markMessagesAsRead(data.senderId);
+            } else if (data.receiverId === currentUser) {
+              // Update unread count for this sender
+              setUnreadCounts(prev => ({
+                ...prev,
+                [data.senderId]: (prev[data.senderId] || 0) + 1
+              }));
+            }
           }
-        } else if (data.type === 'unreadCounts') {
-          // Handle unread counts update from server
-          setUnreadCounts(data.counts);
-        } else if (data.type === 'messagesRead') {
-          // Handle messages being read by the other user
-          if (data.reader === selectedUser) {
-            setMessages(prevMessages => 
-              prevMessages.map(msg => ({
-                ...msg,
-                read: true
-              }))
-            );
-          }
-        } else if (data.senderId === selectedUser || data.receiverId === selectedUser) {
-          const decryptedMessage = {
-            ...data,
-            content: EncryptionService.decryptMessage(
-              data.content,
-              data.senderId,
-              data.receiverId
-            )
-          };
-          setMessages(prev => [...prev, decryptedMessage]);
-          // If we're the receiver and viewing the chat, mark as read
-          if (data.receiverId === currentUser && selectedUser === data.senderId) {
-            markMessagesAsRead(data.senderId);
-          } else if (data.receiverId === currentUser) {
-            // Update unread count for this sender
-            setUnreadCounts(prev => ({
-              ...prev,
-              [data.senderId]: (prev[data.senderId] || 0) + 1
-            }));
-          }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
         }
+      };
+
+      socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      socket.onclose = () => {
+        console.log('WebSocket disconnected');
       };
 
       return () => {
@@ -188,72 +228,7 @@ const App: React.FC = () => {
     }
   };
 
-  // Modify the WebSocket message handler in the useEffect
-  useEffect(() => {
-    if (currentUser) {
-      const socket = new WebSocket('ws://localhost:3001');
-      setWs(socket);
 
-      socket.onopen = () => {
-        socket.send(JSON.stringify({ type: 'register', username: currentUser }));
-      };
-
-      socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'users') {
-          setUsers(data.users.filter((user: string) => user !== currentUser));
-        } else if (data.type === 'messageDeleted') {
-          setMessages(prevMessages => prevMessages.filter(msg => msg.id !== data.messageId));
-        } else if (data.type === 'chatDeleted') {
-          if (data.users.includes(currentUser)) {
-            const otherUser = data.users.find((u: string) => u !== currentUser);
-            if (selectedUser === otherUser) {
-              setMessages([]);
-              setSelectedUser(null);
-            }
-            setUsers(prevUsers => prevUsers.filter(u => u !== otherUser));
-          }
-        } else if (data.type === 'unreadCounts') {
-          // Handle unread counts update from server
-          setUnreadCounts(data.counts);
-        } else if (data.type === 'messagesRead') {
-          // Handle messages being read by the other user
-          if (data.reader === selectedUser) {
-            setMessages(prevMessages => 
-              prevMessages.map(msg => ({
-                ...msg,
-                read: true
-              }))
-            );
-          }
-        } else if (data.senderId === selectedUser || data.receiverId === selectedUser) {
-          const decryptedMessage = {
-            ...data,
-            content: EncryptionService.decryptMessage(
-              data.content,
-              data.senderId,
-              data.receiverId
-            )
-          };
-          setMessages(prev => [...prev, decryptedMessage]);
-          // If we're the receiver and viewing the chat, mark as read
-          if (data.receiverId === currentUser && selectedUser === data.senderId) {
-            markMessagesAsRead(data.senderId);
-          } else if (data.receiverId === currentUser) {
-            // Update unread count for this sender
-            setUnreadCounts(prev => ({
-              ...prev,
-              [data.senderId]: (prev[data.senderId] || 0) + 1
-            }));
-          }
-        }
-      };
-
-      return () => {
-        socket.close();
-      };
-    }
-  }, [currentUser, selectedUser]);
 
   // Modify selectUser to mark messages as read when selecting a chat
   const selectUser = async (username: string) => {
@@ -280,15 +255,27 @@ const App: React.FC = () => {
 
   const sendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUser || !ws || !newMessage.trim()) return;
+    if (!selectedUser || !ws || !newMessage.trim()) {
+      console.log('Cannot send message:', { selectedUser, ws: !!ws, message: newMessage.trim() });
+      return;
+    }
 
-    ws.send(JSON.stringify({
+    const messageData = {
       type: 'message',
       content: newMessage,
       receiverId: selectedUser
-    }));
+    };
 
-    setNewMessage('');
+    console.log('Sending message:', messageData);
+    
+    try {
+      ws.send(JSON.stringify(messageData));
+      console.log('Message sent successfully');
+      setNewMessage('');
+    } catch (error) {
+      console.error('Error sending message:', error);
+      alert('Failed to send message. Please try again.');
+    }
   };
 
   const handleLogout = () => {
@@ -487,8 +474,14 @@ const App: React.FC = () => {
     return (
       <div className="auth-container">
         <form className="auth-form" onSubmit={handleAuth}>
-          <div className="secure-icon">🔒</div>
-          <h2>{isLogin ? 'Login to Secure Chat' : 'Create Secure Account'}</h2>
+          <div className="secure-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 1L3 5V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V5L12 1Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M12 7V11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M12 15H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <h2>{isLogin ? 'SECURE ACCESS' : 'CREATE ACCOUNT'}</h2>
           <input
             type="text"
             value={username}
@@ -503,12 +496,12 @@ const App: React.FC = () => {
             placeholder="Enter password"
             required
           />
-          <button type="submit">{isLogin ? 'Login' : 'Register'}</button>
+          <button type="submit">{isLogin ? 'ACCESS SYSTEM' : 'INITIALIZE'}</button>
           <div className="switch-form">
             {isLogin ? (
-              <p>Don't have an account? <a onClick={() => setIsLogin(false)}>Register</a></p>
+              <p>New user? <a onClick={() => setIsLogin(false)}>Create account</a></p>
             ) : (
-              <p>Already have an account? <a onClick={() => setIsLogin(true)}>Login</a></p>
+              <p>Existing user? <a onClick={() => setIsLogin(true)}>Access system</a></p>
             )}
           </div>
         </form>
@@ -520,11 +513,11 @@ const App: React.FC = () => {
     <div className="chat-container">
       <div className="users-list">
         <div className="chat-header">
-          <h3>
-            {currentUser}
-            <span className="connection-status">●</span>
-          </h3>
-          <button onClick={handleLogout}>Logout</button>
+          <div className="user-info">
+            <h3>{currentUser}</h3>
+            <span className="connection-status">CONNECTED</span>
+          </div>
+          <button onClick={handleLogout} className="logout-btn">TERMINATE</button>
         </div>
         
         <div className="search-container">
@@ -557,7 +550,7 @@ const App: React.FC = () => {
         {selectedUser ? (
           <>
             <div className="chat-header">
-              <h3>Chat with {selectedUser}</h3>
+              <h3>SECURE CHANNEL: {selectedUser}</h3>
             </div>
             <div className="messages">
               {messages.map((msg, index) => (
@@ -586,7 +579,9 @@ const App: React.FC = () => {
           </>
         ) : (
           <div className="no-chat-selected">
-            Select a user to start secure messaging
+            <div className="terminal-text">
+              <span className="prompt">$</span> SELECT TARGET FOR SECURE COMMUNICATION
+            </div>
           </div>
         )}
       </div>

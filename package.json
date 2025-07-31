@@ -9,7 +9,9 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "dev": "npx concurrently \"npm run start:server\" \"npm run start:client\""
+    "dev": "npx concurrently \"npm run start:server\" \"npm run start:client\"",
+    "test:mongodb": "node test-mongodb.js",
+    "test:mongodb-simple": "node test-mongodb-simple.js"
   },
   "keywords": [],
   "author": "",

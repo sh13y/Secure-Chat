@@ -4,7 +4,7 @@ A real-time secure chat application with end-to-end encryption, inspired by secu
 
 **Current Development Status:** 13% complete - Which is basically a proof of concept with delusions of grandeur
 
-![Register Page](assets/Screenshot%202025-07-31%20112856.png)
+![Register Page](assets/Screenshot%202025-07-31%20112350.png)
 
 ## Overview
 
