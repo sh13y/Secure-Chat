@@ -118,7 +118,7 @@ If you encounter SSL-related errors (and you probably will, because technology l
 
 4. Start the development server:
    ```bash
-   npm run start
+   npm run dev
    ```
    *Pray to the JavaScript gods for a successful startup*
 
@@ -178,7 +178,7 @@ WTFPL - Do What The F*ck You Want To Public License
 
 ## Author
 
-**sh13y** - Full-stack developer, part-time student, full-time dreamer, occasional code whisperer
+**sh13y** - Full-time gamer, part-time student, full-time dreamer, occasional code whisperer
 
 ---
 
